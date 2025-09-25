@@ -1,14 +1,14 @@
 import numpy as np
 
-# Grid Configuration
-GRID_WIDTH = 800  # Original WIDTH
-GRID_HEIGHT = 600  # Original HEIGHT
+# Grid Configuration - SMALLER GRID for Mesa compatibility
+GRID_WIDTH = 60  # Much smaller for Mesa
+GRID_HEIGHT = 60  # Square grid
 TORUS_SPACE = True
 
-# Patch system for odor diffusion
-PATCH_WIDTH = 100
-PATCH_HEIGHT = 75
-SCALE = PATCH_WIDTH / GRID_WIDTH
+# Patch system for odor diffusion - ADJUSTED
+PATCH_WIDTH = 30   # Half of grid width
+PATCH_HEIGHT = 30  # Half of grid height
+SCALE = PATCH_WIDTH / GRID_WIDTH  # This becomes 0.5
 
 # Initialize odor patches (4 channels)
 PATCHES = [np.zeros((PATCH_WIDTH, PATCH_HEIGHT)) for _ in range(4)]
@@ -33,19 +33,19 @@ ALPHA_DRUG = 0.5
 BETA_DRUG = 1.0
 LAMBDA_DRUG = 1.0
 
-# Odor Signatures (4-channel system)
-FLAB_ODOR = [0.5, 0, 0.5, 0]
-HERMI_ODOR = [0.5, 0.5, 0, 0]
-DRUG_ODOR = [0, 0, 0, 0.5]
+# Odor Signatures (4-channel system) - STRONGER ODORS
+FLAB_ODOR = [1.0, 0, 1.0, 0]      # 2x stronger
+HERMI_ODOR = [1.0, 1.0, 0, 0]     # 2x stronger
+DRUG_ODOR = [0, 0, 0, 1.0]        # 2x stronger
 
 # Sensing Parameters
-SENSOR_DISTANCE = 5
+SENSOR_DISTANCE = 2  # Smaller distance for smaller grid
 ENCOUNTER_COOLDOWN = 10
 PREY_RADIUS = 5
 NUM_ODOR_TYPES = 4
 
-# Debug
-DEBUG_MODE = False
+# Debug - TURN ON to see what's happening
+DEBUG_MODE = True  # Turn this on!
 
 # Colors
 WHITE = (255, 255, 255)

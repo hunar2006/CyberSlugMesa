@@ -22,13 +22,13 @@ class CyberslugModel(Model):
         self.grid = MultiGrid(GRID_WIDTH, GRID_HEIGHT, True)
         self.schedule = RandomActivation(self)
 
-        # Initialize odor patch system (EXACT ORIGINAL)
+        # CRITICAL: Initialize odor patch system (this was missing!)
         self.patches = [np.zeros((PATCH_WIDTH, PATCH_HEIGHT)) for _ in range(NUM_ODOR_TYPES)]
 
         # Create agents
         self.create_agents()
 
-        # Data collection with all original variables
+        # Data collection
         self.datacollector = DataCollector(
             model_reporters={
                 "Cyberslug_Nutrition": lambda m: m.get_cyberslug().nutrition if m.get_cyberslug() else 0,
@@ -57,25 +57,31 @@ class CyberslugModel(Model):
         self.grid.place_agent(cyberslug, pos)
         agent_id += 1
 
-        # Create prey agents
+        # Create prey agents - FIXED ranges for smaller grid
         for _ in range(self.hermi_count):
-            hermi = HermiAgent(agent_id, self)
+            x = random.randint(5, GRID_WIDTH - 5)  # 5 to 55 for 60x60 grid
+            y = random.randint(5, GRID_HEIGHT - 5)  # 5 to 55 for 60x60 grid
+            hermi = HermiAgent(agent_id, self, x, y)
             self.schedule.add(hermi)
-            pos = (random.randint(50, GRID_WIDTH - 50), random.randint(50, GRID_HEIGHT - 50))
+            pos = (int(x), int(y))
             self.grid.place_agent(hermi, pos)
             agent_id += 1
 
         for _ in range(self.flab_count):
-            flab = FlabAgent(agent_id, self)
+            x = random.randint(5, GRID_WIDTH - 5)  # FIXED
+            y = random.randint(5, GRID_HEIGHT - 5)  # FIXED
+            flab = FlabAgent(agent_id, self, x, y)
             self.schedule.add(flab)
-            pos = (random.randint(50, GRID_WIDTH - 50), random.randint(50, GRID_HEIGHT - 50))
+            pos = (int(x), int(y))
             self.grid.place_agent(flab, pos)
             agent_id += 1
 
         for _ in range(self.fauxflab_count):
-            fauxflab = FauxFlabAgent(agent_id, self)
+            x = random.randint(5, GRID_WIDTH - 5)  # FIXED
+            y = random.randint(5, GRID_HEIGHT - 5)  # FIXED
+            fauxflab = FauxFlabAgent(agent_id, self, x, y)
             self.schedule.add(fauxflab)
-            pos = (random.randint(50, GRID_WIDTH - 50), random.randint(50, GRID_HEIGHT - 50))
+            pos = (int(x), int(y))
             self.grid.place_agent(fauxflab, pos)
             agent_id += 1
 
@@ -86,7 +92,7 @@ class CyberslugModel(Model):
         return None
 
     def convert_patch_to_coord(self, x, y):
-        """EXACT ORIGINAL coordinate conversion"""
+        """EXACT COPY from original utils.py"""
         px = int((x - GRID_WIDTH / 2) * SCALE + PATCH_WIDTH / 2)
         py = int((y - GRID_HEIGHT / 2) * SCALE + PATCH_HEIGHT / 2)
         px = max(0, min(PATCH_WIDTH - 1, px))
@@ -99,7 +105,7 @@ class CyberslugModel(Model):
         return [self.patches[i][px, py] for i in range(NUM_ODOR_TYPES)]
 
     def set_patch(self, x, y, odor_list):
-        """EXACT ORIGINAL odor deposition"""
+        """EXACT ORIGINAL odor deposition - THIS WAS THE MISSING FUNCTION!"""
         px, py = self.convert_patch_to_coord(x, y)
         for i in range(NUM_ODOR_TYPES):
             self.patches[i][px, py] += odor_list[i]
