@@ -1,118 +1,116 @@
-import mesa
+from mesa import Model
+from mesa.time import RandomActivation
+from mesa.space import MultiGrid
+from mesa.datacollection import DataCollector
 import numpy as np
 from scipy.ndimage import gaussian_filter
+import random
+import math
 from agents import CyberslugAgent, HermiAgent, FlabAgent, FauxFlabAgent
 from config import *
 
 
-class CyberslugModel(mesa.Model):
-    """
-    Mesa model implementing Cyberslug ecosystem with odor diffusion
-    """
-
-    def __init__(self, hermi_count=HERMI_POPULATION, flab_count=FLAB_POPULATION,
-                 fauxflab_count=FAUXFLAB_POPULATION):
+class CyberslugModel(Model):
+    def __init__(self, hermi_count=4, flab_count=4, fauxflab_count=4):
         super().__init__()
 
-        # Model parameters
         self.hermi_count = hermi_count
         self.flab_count = flab_count
         self.fauxflab_count = fauxflab_count
 
         # Create grid and scheduler
-        self.grid = mesa.space.MultiGrid(GRID_WIDTH, GRID_HEIGHT, TORUS_SPACE)
-        self.schedule = mesa.time.RandomActivation(self)
+        self.grid = MultiGrid(GRID_WIDTH, GRID_HEIGHT, True)
+        self.schedule = RandomActivation(self)
 
-        # Odor diffusion system (4 channels)
-        self.odor_patches = np.zeros((4, GRID_WIDTH, GRID_HEIGHT))
+        # Initialize odor patch system (EXACT ORIGINAL)
+        self.patches = [np.zeros((PATCH_WIDTH, PATCH_HEIGHT)) for _ in range(NUM_ODOR_TYPES)]
 
         # Create agents
         self.create_agents()
 
-        # Data collection
-        self.datacollector = mesa.DataCollector(
+        # Data collection with all original variables
+        self.datacollector = DataCollector(
             model_reporters={
-                "Cyberslug_Nutrition": lambda m: m.get_cyberslug().nutrition,
-                "Cyberslug_AppState": lambda m: m.get_cyberslug().app_state,
-                "Cyberslug_Incentive": lambda m: m.get_cyberslug().incentive,
-                "Hermi_Encounters": lambda m: m.get_cyberslug().hermi_counter,
-                "Flab_Encounters": lambda m: m.get_cyberslug().flab_counter,
-                "Drug_Encounters": lambda m: m.get_cyberslug().drug_counter,
-                "Somatic_Map": lambda m: m.get_cyberslug().somatic_map,
-            },
-            agent_reporters={
-                "x": "pos[0]" if "pos" in dir(mesa.Agent) else lambda a: a.pos[0] if a.pos else 0,
-                "y": "pos[1]" if "pos" in dir(mesa.Agent) else lambda a: a.pos[1] if a.pos else 0,
+                "Cyberslug_Nutrition": lambda m: m.get_cyberslug().nutrition if m.get_cyberslug() else 0,
+                "Cyberslug_AppState": lambda m: m.get_cyberslug().app_state if m.get_cyberslug() else 0,
+                "Cyberslug_Incentive": lambda m: m.get_cyberslug().incentive if m.get_cyberslug() else 0,
+                "Cyberslug_Satiation": lambda m: m.get_cyberslug().satiation if m.get_cyberslug() else 0,
+                "Cyberslug_Pain": lambda m: m.get_cyberslug().pain if m.get_cyberslug() else 0,
+                "Cyberslug_SomaticMap": lambda m: m.get_cyberslug().somatic_map if m.get_cyberslug() else 0,
+                "Hermi_Encounters": lambda m: m.get_cyberslug().hermi_counter if m.get_cyberslug() else 0,
+                "Flab_Encounters": lambda m: m.get_cyberslug().flab_counter if m.get_cyberslug() else 0,
+                "Drug_Encounters": lambda m: m.get_cyberslug().drug_counter if m.get_cyberslug() else 0,
+                "Reward_Positive": lambda m: m.get_cyberslug().reward_pos if m.get_cyberslug() else 0,
+                "Reward_Negative": lambda m: m.get_cyberslug().reward_neg if m.get_cyberslug() else 0,
             }
         )
 
         self.running = True
 
     def create_agents(self):
-        """Create all agents in the model"""
         agent_id = 0
 
-        # Create Cyberslug
+        # Create Cyberslug at center
         cyberslug = CyberslugAgent(agent_id, self)
         self.schedule.add(cyberslug)
-        pos = self.grid.find_empty()
+        pos = (GRID_WIDTH // 2, GRID_HEIGHT // 2)
         self.grid.place_agent(cyberslug, pos)
         agent_id += 1
 
-        # Create Hermi prey
+        # Create prey agents
         for _ in range(self.hermi_count):
             hermi = HermiAgent(agent_id, self)
             self.schedule.add(hermi)
-            pos = self.grid.find_empty()
-            if pos:
-                self.grid.place_agent(hermi, pos)
+            pos = (random.randint(50, GRID_WIDTH - 50), random.randint(50, GRID_HEIGHT - 50))
+            self.grid.place_agent(hermi, pos)
             agent_id += 1
 
-        # Create Flab prey
         for _ in range(self.flab_count):
             flab = FlabAgent(agent_id, self)
             self.schedule.add(flab)
-            pos = self.grid.find_empty()
-            if pos:
-                self.grid.place_agent(flab, pos)
+            pos = (random.randint(50, GRID_WIDTH - 50), random.randint(50, GRID_HEIGHT - 50))
+            self.grid.place_agent(flab, pos)
             agent_id += 1
 
-        # Create FauxFlab prey
         for _ in range(self.fauxflab_count):
             fauxflab = FauxFlabAgent(agent_id, self)
             self.schedule.add(fauxflab)
-            pos = self.grid.find_empty()
-            if pos:
-                self.grid.place_agent(fauxflab, pos)
+            pos = (random.randint(50, GRID_WIDTH - 50), random.randint(50, GRID_HEIGHT - 50))
+            self.grid.place_agent(fauxflab, pos)
             agent_id += 1
 
     def get_cyberslug(self):
-        """Get the Cyberslug agent"""
         for agent in self.schedule.agents:
             if isinstance(agent, CyberslugAgent):
                 return agent
         return None
 
-    def deposit_odor(self, pos, odor_signature):
-        """Deposit odor at position"""
-        x, y = pos
-        if 0 <= x < GRID_WIDTH and 0 <= y < GRID_HEIGHT:
-            for i, concentration in enumerate(odor_signature):
-                self.odor_patches[i, x, y] += concentration
+    def convert_patch_to_coord(self, x, y):
+        """EXACT ORIGINAL coordinate conversion"""
+        px = int((x - GRID_WIDTH / 2) * SCALE + PATCH_WIDTH / 2)
+        py = int((y - GRID_HEIGHT / 2) * SCALE + PATCH_HEIGHT / 2)
+        px = max(0, min(PATCH_WIDTH - 1, px))
+        py = max(0, min(PATCH_HEIGHT - 1, py))
+        return px, py
 
     def get_odor_at_position(self, x, y):
-        """Get odor concentrations at position"""
-        x = int(max(0, min(GRID_WIDTH - 1, x)))
-        y = int(max(0, min(GRID_HEIGHT - 1, y)))
-        return self.odor_patches[:, x, y].copy()
+        """Get odor concentrations at position using patch system"""
+        px, py = self.convert_patch_to_coord(x, y)
+        return [self.patches[i][px, py] for i in range(NUM_ODOR_TYPES)]
+
+    def set_patch(self, x, y, odor_list):
+        """EXACT ORIGINAL odor deposition"""
+        px, py = self.convert_patch_to_coord(x, y)
+        for i in range(NUM_ODOR_TYPES):
+            self.patches[i][px, py] += odor_list[i]
 
     def update_odors(self):
-        """Apply diffusion and decay to odors"""
-        for i in range(4):
-            self.odor_patches[i] = gaussian_filter(self.odor_patches[i], sigma=1) * 0.95
+        """EXACT ORIGINAL odor diffusion and decay"""
+        for i in range(NUM_ODOR_TYPES):
+            self.patches[i] = gaussian_filter(self.patches[i], sigma=1) * 0.95
 
     def step(self):
-        """Advance model by one step"""
+        """Step model with exact original sequence"""
         self.schedule.step()
         self.update_odors()
         self.datacollector.collect(self)
