@@ -31,9 +31,7 @@ except ImportError:
             self.model.random.shuffle(agents)
             for agent in agents:
                 agent.step()
-from mesa.space import ContinuousSpace
-from mesa.datacollection import DataCollector
-import math
+
 
 class CyberSlugModel(Model):
     """
@@ -75,6 +73,7 @@ class CyberSlugModel(Model):
 
         # Step counter
         self.ticks = 0
+        self.steps = 0
 
         # Data collector
         self.datacollector = DataCollector(
@@ -155,6 +154,7 @@ class CyberSlugModel(Model):
 
         # Increment tick counter
         self.ticks += 1
+        self.steps += 1
 
         # Collect data
         self.datacollector.collect(self)
