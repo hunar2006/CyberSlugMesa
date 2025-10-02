@@ -1,122 +1,211 @@
-from mesa import Model
-from mesa.time import RandomActivation
-from mesa.space import MultiGrid
-from mesa.datacollection import DataCollector
+"""
+model.py - MESA Model for CyberSlug Simulation
+Core model implementing the environment and stepping logic
+"""
 import numpy as np
-from scipy.ndimage import gaussian_filter
-import random
 import math
-from agents import CyberslugAgent, HermiAgent, FlabAgent, FauxFlabAgent
-from config import *
+from mesa import Model, Agent
+from mesa.space import ContinuousSpace
+from mesa.datacollection import DataCollector
 
+try:
+    from mesa.time import RandomActivation
+except ImportError:
+    # MESA 3.0+
+    class RandomActivation:
+        def __init__(self, model):
+            self.model = model
+            self.agents = []
+            self._agents = {}
 
-class CyberslugModel(Model):
-    def __init__(self, hermi_count=4, flab_count=4, fauxflab_count=4):
+        def add(self, agent):
+            self.agents.append(agent)
+            self._agents[agent.unique_id] = agent
+
+        def remove(self, agent):
+            self.agents.remove(agent)
+            del self._agents[agent.unique_id]
+
+        def step(self):
+            agents = list(self.agents)
+            self.model.random.shuffle(agents)
+            for agent in agents:
+                agent.step()
+from mesa.space import ContinuousSpace
+from mesa.datacollection import DataCollector
+import math
+
+class CyberSlugModel(Model):
+    """
+    A model simulating a Cyberslug learning to navigate using chemosensory cues.
+    Includes prey (Hermissenda, Flabellina, Faux-Flabellina) with odor trails.
+    """
+
+    def __init__(self, width=600, height=600,
+                 hermi_population=4, flab_population=4, fauxflab_population=4,
+                 patch_width=200, patch_height=200):
         super().__init__()
 
-        self.hermi_count = hermi_count
-        self.flab_count = flab_count
-        self.fauxflab_count = fauxflab_count
+        # Dimensions
+        self.width = width
+        self.height = height
+        self.patch_width = patch_width
+        self.patch_height = patch_height
+        self.scale = patch_width / width
 
-        # Create grid and scheduler
-        self.grid = MultiGrid(GRID_WIDTH, GRID_HEIGHT, True)
+        # Grid setup - continuous space for movement
+        self.space = ContinuousSpace(width, height, torus=True)
+
+        # Scheduler
         self.schedule = RandomActivation(self)
 
-        # CRITICAL: Initialize odor patch system (this was missing!)
-        self.patches = [np.zeros((PATCH_WIDTH, PATCH_HEIGHT)) for _ in range(NUM_ODOR_TYPES)]
+        # Odor patches - 4 types: betaine, hermi, flab, drug
+        self.num_odor_types = 4
+        self.patches = np.zeros((self.num_odor_types, patch_width, patch_height))
 
-        # Create agents
-        self.create_agents()
+        # Simulation parameters
+        self.prey_radius = 4
+        self.sensor_distance = 4
+        self.encounter_cooldown = 10
 
-        # Data collection
+        # Population settings
+        self.hermi_population = hermi_population
+        self.flab_population = flab_population
+        self.fauxflab_population = fauxflab_population
+
+        # Step counter
+        self.ticks = 0
+
+        # Data collector
         self.datacollector = DataCollector(
             model_reporters={
-                "Cyberslug_Nutrition": lambda m: m.get_cyberslug().nutrition if m.get_cyberslug() else 0,
-                "Cyberslug_AppState": lambda m: m.get_cyberslug().app_state if m.get_cyberslug() else 0,
-                "Cyberslug_Incentive": lambda m: m.get_cyberslug().incentive if m.get_cyberslug() else 0,
-                "Cyberslug_Satiation": lambda m: m.get_cyberslug().satiation if m.get_cyberslug() else 0,
-                "Cyberslug_Pain": lambda m: m.get_cyberslug().pain if m.get_cyberslug() else 0,
-                "Cyberslug_SomaticMap": lambda m: m.get_cyberslug().somatic_map if m.get_cyberslug() else 0,
-                "Hermi_Encounters": lambda m: m.get_cyberslug().hermi_counter if m.get_cyberslug() else 0,
-                "Flab_Encounters": lambda m: m.get_cyberslug().flab_counter if m.get_cyberslug() else 0,
-                "Drug_Encounters": lambda m: m.get_cyberslug().drug_counter if m.get_cyberslug() else 0,
-                "Reward_Positive": lambda m: m.get_cyberslug().reward_pos if m.get_cyberslug() else 0,
-                "Reward_Negative": lambda m: m.get_cyberslug().reward_neg if m.get_cyberslug() else 0,
+                "Ticks": lambda m: m.ticks,
+                "Hermi_Eaten": lambda m: m.cyberslug.hermi_counter,
+                "Flab_Eaten": lambda m: m.cyberslug.flab_counter,
+                "Fauxflab_Eaten": lambda m: m.cyberslug.fauxflab_counter,
+                "Appetitive_State": lambda m: m.cyberslug.app_state,
+                "Incentive": lambda m: m.cyberslug.incentive,
+                "Nutrition": lambda m: m.cyberslug.nutrition,
             }
         )
 
-        self.running = True
+        # Create agents
+        self._create_agents()
 
-    def create_agents(self):
-        agent_id = 0
+    def _create_agents(self):
+        """Create all agents in the simulation"""
+        from agents import CyberslugAgent, PreyAgent
 
-        # Create Cyberslug at center
-        cyberslug = CyberslugAgent(agent_id, self)
-        self.schedule.add(cyberslug)
-        pos = (GRID_WIDTH // 2, GRID_HEIGHT // 2)
-        self.grid.place_agent(cyberslug, pos)
-        agent_id += 1
+        # Create the Cyberslug (unique_id=0)
+        self.cyberslug = CyberslugAgent(0, self)
+        self.schedule.add(self.cyberslug)
+        self.space.place_agent(self.cyberslug, (self.width/2, self.height/2))
 
-        # Create prey agents - FIXED ranges for smaller grid
-        for _ in range(self.hermi_count):
-            x = random.randint(5, GRID_WIDTH - 5)  # 5 to 55 for 60x60 grid
-            y = random.randint(5, GRID_HEIGHT - 5)  # 5 to 55 for 60x60 grid
-            hermi = HermiAgent(agent_id, self, x, y)
-            self.schedule.add(hermi)
-            pos = (int(x), int(y))
-            self.grid.place_agent(hermi, pos)
-            agent_id += 1
+        # Create Hermissenda prey (cyan)
+        for i in range(self.hermi_population):
+            prey = PreyAgent(
+                i + 1,
+                self,
+                prey_type="hermi",
+                color=(0, 255, 255),
+                odor=[0.5, 0.5, 0, 0]
+            )
+            self.schedule.add(prey)
+            x = self.random.randrange(self.width)
+            y = self.random.randrange(self.height)
+            self.space.place_agent(prey, (x, y))
 
-        for _ in range(self.flab_count):
-            x = random.randint(5, GRID_WIDTH - 5)  # FIXED
-            y = random.randint(5, GRID_HEIGHT - 5)  # FIXED
-            flab = FlabAgent(agent_id, self, x, y)
-            self.schedule.add(flab)
-            pos = (int(x), int(y))
-            self.grid.place_agent(flab, pos)
-            agent_id += 1
+        # Create Flabellina prey (pink)
+        base_id = self.hermi_population + 1
+        for i in range(self.flab_population):
+            prey = PreyAgent(
+                base_id + i,
+                self,
+                prey_type="flab",
+                color=(255, 105, 180),
+                odor=[0.5, 0, 0.5, 0]
+            )
+            self.schedule.add(prey)
+            x = self.random.randrange(self.width)
+            y = self.random.randrange(self.height)
+            self.space.place_agent(prey, (x, y))
 
-        for _ in range(self.fauxflab_count):
-            x = random.randint(5, GRID_WIDTH - 5)  # FIXED
-            y = random.randint(5, GRID_HEIGHT - 5)  # FIXED
-            fauxflab = FauxFlabAgent(agent_id, self, x, y)
-            self.schedule.add(fauxflab)
-            pos = (int(x), int(y))
-            self.grid.place_agent(fauxflab, pos)
-            agent_id += 1
-
-    def get_cyberslug(self):
-        for agent in self.schedule.agents:
-            if isinstance(agent, CyberslugAgent):
-                return agent
-        return None
-
-    def convert_patch_to_coord(self, x, y):
-        """EXACT COPY from original utils.py"""
-        px = int((x - GRID_WIDTH / 2) * SCALE + PATCH_WIDTH / 2)
-        py = int((y - GRID_HEIGHT / 2) * SCALE + PATCH_HEIGHT / 2)
-        px = max(0, min(PATCH_WIDTH - 1, px))
-        py = max(0, min(PATCH_HEIGHT - 1, py))
-        return px, py
-
-    def get_odor_at_position(self, x, y):
-        """Get odor concentrations at position using patch system"""
-        px, py = self.convert_patch_to_coord(x, y)
-        return [self.patches[i][px, py] for i in range(NUM_ODOR_TYPES)]
-
-    def set_patch(self, x, y, odor_list):
-        """EXACT ORIGINAL odor deposition - THIS WAS THE MISSING FUNCTION!"""
-        px, py = self.convert_patch_to_coord(x, y)
-        for i in range(NUM_ODOR_TYPES):
-            self.patches[i][px, py] += odor_list[i]
-
-    def update_odors(self):
-        """EXACT ORIGINAL odor diffusion and decay"""
-        for i in range(NUM_ODOR_TYPES):
-            self.patches[i] = gaussian_filter(self.patches[i], sigma=1) * 0.95
+        # Create Faux-Flabellina prey (yellow)
+        base_id = self.hermi_population + self.flab_population + 1
+        for i in range(self.fauxflab_population):
+            prey = PreyAgent(
+                base_id + i,
+                self,
+                prey_type="fauxflab",
+                color=(255, 255, 0),
+                odor=[0.0, 0.0, 0.5, 0.0]
+            )
+            self.schedule.add(prey)
+            x = self.random.randrange(self.width)
+            y = self.random.randrange(self.height)
+            self.space.place_agent(prey, (x, y))
 
     def step(self):
-        """Step model with exact original sequence"""
+        """Advance the model by one step"""
+        # Update odor patches
+        self.update_odor_patches()
+
+        # All agents take their step
         self.schedule.step()
-        self.update_odors()
+
+        # Increment tick counter
+        self.ticks += 1
+
+        # Collect data
         self.datacollector.collect(self)
+
+    def update_odor_patches(self):
+        """
+        NetLogo-style odor dynamics:
+        1) Diffuse to 8 neighbors (Moore neighborhood)
+        2) Evaporate
+        3) Using toroidal boundaries
+        """
+        amount = 0.5
+        evap = 0.95
+
+        for i in range(self.patches.shape[0]):
+            field = self.patches[i]
+            padded = np.pad(field, 1, mode='wrap')
+
+            neighbors_sum = (
+                padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +
+                padded[1:-1, :-2]                     + padded[1:-1, 2:] +
+                padded[2:, :-2]  + padded[2:, 1:-1]  + padded[2:, 2:]
+            )
+
+            self.patches[i] = evap * ((1.0 - amount) * field + (amount / 8.0) * neighbors_sum)
+
+    def convert_patch_to_coord(self, x, y):
+        """Convert world coordinates to patch grid coordinates"""
+        px = int((x - self.width / 2) * self.scale + self.patch_width / 2)
+        py = int((y - self.height / 2) * self.scale + self.patch_height / 2)
+        px = max(0, min(self.patch_width - 1, px))
+        py = max(0, min(self.patch_height - 1, py))
+        return px, py
+
+    def set_patch_odor(self, x, y, odorlist):
+        """Deposit odor at a given location"""
+        px, py = self.convert_patch_to_coord(x, y)
+        self.patches[:, px, py] += odorlist
+
+    def get_sensors(self, x, y, heading):
+        """Get sensory input from odor patches based on heading"""
+        px, py = self.convert_patch_to_coord(x, y)
+
+        left_x = int(px + self.sensor_distance * math.cos(math.radians(heading - 45)))
+        left_y = int(py + self.sensor_distance * math.sin(math.radians(heading - 45)))
+        right_x = int(px + self.sensor_distance * math.cos(math.radians(heading + 45)))
+        right_y = int(py + self.sensor_distance * math.sin(math.radians(heading + 45)))
+
+        left_x = max(0, min(self.patch_width - 1, left_x))
+        left_y = max(0, min(self.patch_height - 1, left_y))
+        right_x = max(0, min(self.patch_width - 1, right_x))
+        right_y = max(0, min(self.patch_height - 1, right_y))
+
+        return self.patches[:, left_x, left_y], self.patches[:, right_x, right_y]
