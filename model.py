@@ -146,15 +146,17 @@ class CyberSlugModel(Model):
 
     def step(self):
         """Advance the model by one step"""
+        # DON'T increment - MESA does it automatically!
+        # self.steps += 1  <-- REMOVE THIS LINE
+
+        self.ticks = self.steps  # Just sync ticks with steps
+
         # Update odor patches
         self.update_odor_patches()
 
         # All agents take their step
-        self.schedule.step()
-
-        # Increment tick counter
-        self.ticks += 1
-        self.steps += 1
+        for agent in list(self.schedule.agents):
+            agent.step()
 
         # Collect data
         self.datacollector.collect(self)
