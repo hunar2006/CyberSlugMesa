@@ -374,7 +374,7 @@ def Page():
 
                 with solara.Row():
                     solara.SliderInt("Steps per frame", value=steps_per_frame,
-                                    min=1, max=100, disabled=auto_running.value)
+                                    min=1, max=500, disabled=auto_running.value)
                     solara.SliderFloat("Update speed (sec)", value=update_interval,
                                       min=0.01, max=2.0, step=0.05, disabled=auto_running.value)
 

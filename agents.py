@@ -276,6 +276,8 @@ class CyberslugAgent(Agent):
         # Update internal state based on sensors and encounter
         turn_angle = self.update_state(encounter)
 
+        self.turn_angle = turn_angle
+
         # Update heading
         self.angle = (self.angle + turn_angle) % 360
 
@@ -531,7 +533,7 @@ class CyberslugAgent(Agent):
                 self.encounter_timer = self.model.encounter_cooldown
                 # NetLogo: fauxflab triggers R_pos_input (REMOVE THIS in final version)
                 # For now, following NetLogo exactly:
-                self.R_pos_input += 2.0
+                #self.R_pos_input += 2.0
 
         # --- Pain calculations ---
         self.pain = 10 / (1 + math.exp(-2 * (self.sns_pain_total + self.spontaneous_pain) + 10))
@@ -547,10 +549,10 @@ class CyberslugAgent(Agent):
             self.satiation = 1 / ((1 + 0.7 * math.exp(-4 * self.nutrition + 2)) ** 2)
 
         # Positive reward (NetLogo formula with Vh_rp and Vf_rp)
-        self.reward = (sns_betaine / (1 + (0.5 * (self.Vh_rp * sns_hermi) +
-                       0 * (self.Vf_rp * sns_flab)) - 0.008 / self.satiation) +
-                       1.32 * (self.Vh_rp * sns_hermi) +
-                       0 * (self.Vf_rp * sns_flab))
+        self.reward = (sns_betaine / (1 + (0.25 * (self.Vh_rp * sns_hermi) +
+                                           0.25 * (self.Vf_rp * sns_flab)) - 0.008 / self.satiation) +
+                       0.66 * (self.Vh_rp * sns_hermi) +
+                       0.66 * (self.Vf_rp * sns_flab))
 
         # Negative reward (NetLogo formula with Vf_rn)
         self.reward_neg = 1.32 * self.Vf_rn * sns_flab + self.sns_pain_total
@@ -583,8 +585,7 @@ class CyberslugAgent(Agent):
         self.app_state_switch = (-2 / (1 + math.exp(-100 * (self.app_state - 0.245)))) + 1
 
         # --- Turn Angle (NetLogo formula) ---
-        turn_angle = self.app_state_switch * 2 * ((1 / (1 + math.exp(3 * self.somatic_map))) - 0.5)
-
+        turn_angle = self.app_state_switch * 2 * ((1 / (1 + math.exp(-3 * self.somatic_map))) - 0.5)
         # --- ADVANCED LEARNING CIRCUIT ---
         self.calc_learning_circuit()
 

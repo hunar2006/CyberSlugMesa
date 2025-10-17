@@ -1,5 +1,3 @@
-# test_turning.py
-
 from model import CyberSlugModel
 from agents import PreyAgent
 import math
@@ -20,40 +18,40 @@ for agent in model.schedule.agents:
 
 if hermi:
     # Place hermi to the RIGHT of slug
-    model.space.move_agent(hermi, (350, 300))  # 50 pixels to the right
+    model.space.move_agent(hermi, (320, 300))  # Only 20 pixels away!
+
+    # Let odors diffuse
+    print("Diffusing odors...")
+    for _ in range(30):
+        model.update_odor_patches()
 
     print("=== TURNING TEST ===")
     print(f"Slug at: {slug.pos}, facing: {slug.angle}°")
     print(f"Hermi at: {hermi.pos}")
-    print(f"Hermi is to the RIGHT")
+    print(f"Hermi is to the RIGHT\n")
 
-    # Run a few steps and watch turning
-    for i in range(10):
+    # Run steps
+    for i in range(20):
         model.step()
 
-        print(f"\nStep {i + 1}:")
+        print(f"Step {i + 1}:")
         print(f"  Slug pos: ({slug.pos[0]:.1f}, {slug.pos[1]:.1f})")
         print(f"  Slug angle: {slug.angle:.1f}°")
-        print(f"  Hermi_left sensor: {slug.sns_odors_left[1]:.3f}")
-        print(f"  Hermi_right sensor: {slug.sns_odors_right[1]:.3f}")
+        print(f"  Hermi sensors: L={slug.sns_odors_left[1]:.3f} R={slug.sns_odors_right[1]:.3f}")
         print(f"  Somatic map: {slug.somatic_map:.3f}")
         print(f"  Turn angle: {slug.turn_angle:.3f}")
-        print(f"  AppState: {slug.app_state:.3f}")
 
-        # Check if turning toward or away
-        angle_to_hermi = math.degrees(math.atan2(hermi.pos[1] - slug.pos[1],
-                                                 hermi.pos[0] - slug.pos[0]))
-        angle_diff = abs((angle_to_hermi - slug.angle + 180) % 360 - 180)
-
-        if angle_diff < 90:
-            print(f"  ✅ Facing TOWARD hermi (diff: {angle_diff:.1f}°)")
+        # Check direction
+        if slug.turn_angle > 0:
+            print(f"  ← Turning LEFT")
+        elif slug.turn_angle < 0:
+            print(f"  → Turning RIGHT")
         else:
-            print(f"  ❌ Facing AWAY from hermi (diff: {angle_diff:.1f}°)")
+            print(f"  | Going straight")
 
-        # Stop if we ate it
         if slug.hermi_counter > 0:
-            print("\n✅ ATE THE HERMI!")
+            print(f"\n✅✅✅ ATE THE HERMI! ✅✅✅")
             break
-
-    if slug.hermi_counter == 0:
-        print("\n❌ NEVER ATE THE HERMI - AVOIDING IT!")
+    else:
+        print("\n❌ Did not eat hermi")
+        print(f"Final distance: {math.sqrt((slug.pos[0] - hermi.pos[0]) ** 2 + (slug.pos[1] - hermi.pos[1]) ** 2):.1f}")
