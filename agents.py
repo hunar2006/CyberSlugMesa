@@ -133,7 +133,7 @@ class CyberslugAgent(Agent):
         self.previous_heading = 0
         self.speed = 0.06
         self.path = []
-        self.size = 5 + self.random.uniform(0, 10)  # Variable size (5-15)
+        self.size = 30 + self.random.uniform(0, 10)  # Variable size (5-15)
         self.tick_timer = 10
 
         # Learning and motivation variables
